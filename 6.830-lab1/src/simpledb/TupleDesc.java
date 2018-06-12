@@ -5,6 +5,8 @@ import java.util.*;
  * TupleDesc describes the schema of a tuple.
  */
 public class TupleDesc {
+    private Type[] typeAr;
+    private String[] fieldAr;
 
     /**
      * Merge two TupleDescs into one, with td1.numFields + td2.numFields
@@ -16,7 +18,19 @@ public class TupleDesc {
      */
     public static TupleDesc combine(TupleDesc td1, TupleDesc td2) {
         // some code goes here
-        return null;
+        int l1 = td1.typeAr.length;
+        int l2 = td2.typeAr.length;
+
+        Type[] ta = new Type[l1+l2];
+        System.arraycopy(td1.typeAr, 0, ta, 0, l1);
+        System.arraycopy(td2.typeAr, 0, ta, l1, l2);
+        TupleDesc td = new TupleDesc(ta);
+
+        td.fieldAr = new String[l1+l2];
+        System.arraycopy(td1.fieldAr, 0, td.fieldAr, 0, l1);
+        System.arraycopy(td2.fieldAr, 0, td.fieldAr, l1, l2);
+
+        return td;
     }
 
     /**
@@ -29,6 +43,8 @@ public class TupleDesc {
      */
     public TupleDesc(Type[] typeAr, String[] fieldAr) {
         // some code goes here
+        this.typeAr = typeAr;
+        this.fieldAr = fieldAr;
     }
 
     /**
@@ -41,6 +57,8 @@ public class TupleDesc {
      */
     public TupleDesc(Type[] typeAr) {
         // some code goes here
+        this.typeAr = typeAr;
+        this.fieldAr = new String[typeAr.length];
     }
 
     /**
@@ -48,7 +66,7 @@ public class TupleDesc {
      */
     public int numFields() {
         // some code goes here
-        return 0;
+        return typeAr.length;
     }
 
     /**
@@ -60,6 +78,8 @@ public class TupleDesc {
      */
     public String getFieldName(int i) throws NoSuchElementException {
         // some code goes here
+        if (i >= numFields())
+            throw new NoSuchElementException();
         return null;
     }
 
@@ -72,7 +92,22 @@ public class TupleDesc {
      */
     public int nameToId(String name) throws NoSuchElementException {
         // some code goes here
-        return 0;
+        if (name == null)
+            throw new NoSuchElementException();
+        
+        boolean allNull = true;
+        for(int i = 0;i < numFields();i++)
+            if (fieldAr[i] != null) {
+                allNull = false;
+                break;
+            }
+        if (allNull)
+            throw new NoSuchElementException();
+
+        for(int i = 0;i < numFields();i++)
+            if (fieldAr[i].equals(name)) 
+                return i;
+        throw new NoSuchElementException();
     }
 
     /**
@@ -84,7 +119,9 @@ public class TupleDesc {
      */
     public Type getType(int i) throws NoSuchElementException {
         // some code goes here
-        return null;
+        if (i >= numFields())
+            throw new NoSuchElementException();
+        return typeAr[i];
     }
 
     /**
@@ -93,7 +130,10 @@ public class TupleDesc {
      */
     public int getSize() {
         // some code goes here
-        return 0;
+        int sz = 0;
+        for (Type t: typeAr)
+            sz += t.getLen();
+        return sz;
     }
 
     /**
@@ -106,7 +146,21 @@ public class TupleDesc {
      */
     public boolean equals(Object o) {
         // some code goes here
-        return false;
+        if (o == null)
+            return false;
+        if (!(o instanceof TupleDesc))
+            return false;
+
+        TupleDesc td = (TupleDesc)o;
+        if (getSize() != td.getSize())
+            return false;
+        int i = 0;
+        for (;i < numFields() && i < td.numFields();i++) 
+            if (typeAr[i] != td.typeAr[i])
+                return false;
+        if (i != numFields())
+            return false;
+        return true;
     }
 
     public int hashCode() {
@@ -123,6 +177,13 @@ public class TupleDesc {
      */
     public String toString() {
         // some code goes here
-        return "";
+        StringBuffer sb = new StringBuffer("");
+        for (int i = 0;i < numFields();i++) {
+            sb.append(typeAr[i] == Type.INT_TYPE ? "int" : "string");
+            sb.append("(" + fieldAr[i] + ")");
+            if (i < numFields()-1)
+                sb.append(", ");
+        }
+        return sb.toString();
     }
 }
