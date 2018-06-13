@@ -15,13 +15,51 @@ import java.util.*;
  */
 
 public class Catalog {
+    private class CatEntry {
+        private DbFile file;
+        private String name;
+        private String pkeyField;
+        
+        public CatEntry(DbFile file, String name, String pkeyField) {
+            this.file = file;
+            this.name = name;
+            this.pkeyField = pkeyField;
+        }
 
+        public void setFile(DbFile file) {
+            this.file = file;
+        }
+
+        public DbFile getFile() {
+            return file;
+        }
+
+        public void setName(String name) {
+            this.name = name;
+        }
+
+        public String getName() {
+            return name;
+        }
+
+        public void setPkeyField(String pkeyField) {
+            this.pkeyField = pkeyField;
+        }
+
+        public String getPkeyField() {
+            return pkeyField;
+        }
+    }
+    private TreeMap<Integer, CatEntry> id2Entry;
+    private TreeMap<String, Integer> name2Id;
     /**
      * Constructor.
      * Creates a new, empty catalog.
      */
     public Catalog() {
         // some code goes here
+        id2Entry = new TreeMap<Integer, CatEntry>();
+        name2Id = new TreeMap<String, Integer>();
     }
 
     /**
@@ -35,6 +73,12 @@ public class Catalog {
      */
     public void addTable(DbFile file, String name, String pkeyField) {
         // some code goes here
+        if (name2Id.containsKey(name)) {
+            id2Entry.remove(name2Id.get(name));
+            name2Id.remove(name);
+        }
+        id2Entry.put(file.getId(), new CatEntry(file, name, pkeyField));
+        name2Id.put(name, file.getId());
     }
 
     public void addTable(DbFile file, String name) {
@@ -57,9 +101,13 @@ public class Catalog {
      * Return the id of the table with a specified name,
      * @throws NoSuchElementException if the table doesn't exist
      */
-    public int getTableId(String name) {
+    public int getTableId(String name) throws NoSuchElementException{
         // some code goes here
-        return 0;
+        if (name == null)
+            throw new NoSuchElementException();
+        if (name2Id.containsKey(name))
+            return name2Id.get(name).intValue();
+        throw new NoSuchElementException();
     }
 
     /**
@@ -69,7 +117,9 @@ public class Catalog {
      */
     public TupleDesc getTupleDesc(int tableid) throws NoSuchElementException {
         // some code goes here
-        return null;
+        if (id2Entry.containsKey(tableid))
+            return id2Entry.get(tableid).getFile().getTupleDesc();
+        throw new NoSuchElementException();
     }
 
     /**
@@ -80,27 +130,35 @@ public class Catalog {
      */
     public DbFile getDbFile(int tableid) throws NoSuchElementException {
         // some code goes here
-        return null;
+        if (id2Entry.containsKey(tableid))
+            return id2Entry.get(tableid).getFile();
+        throw new NoSuchElementException();
     }
 
     /** Delete all tables from the catalog */
     public void clear() {
         // some code goes here
+        id2Entry.clear();
+        name2Id.clear();
     }
 
-    public String getPrimaryKey(int tableid) {
+    public String getPrimaryKey(int tableid) throws NoSuchElementException {
         // some code goes here
-        return null;
+        if (id2Entry.containsKey(tableid))
+            return id2Entry.get(tableid).getPkeyField();
+        throw new NoSuchElementException();
     }
 
     public Iterator<Integer> tableIdIterator() {
         // some code goes here
-        return null;
+        return id2Entry.keySet().iterator();
     }
 
-    public String getTableName(int id) {
+    public String getTableName(int tableid) throws NoSuchElementException {
         // some code goes here
-        return null;
+        if (id2Entry.containsKey(tableid))
+            return id2Entry.get(tableid).getName();
+        throw new NoSuchElementException();
     }
     
     /**

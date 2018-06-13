@@ -6,9 +6,9 @@ package simpledb;
  * Field objects with the data for each field.
  */
 public class Tuple {
-    TupleDesc td;
-    RecordId rid;
-    Field[] flds;
+    private TupleDesc td;
+    private RecordId rid;
+    private Field[] flds;
     /**
      * Create a new tuple with the specified schema (type).
      *
