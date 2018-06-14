@@ -11,6 +11,7 @@ import java.io.*;
  * locks to read/write the page.
  */
 public class BufferPool {
+    private Page[] buffer;
     /** Bytes per page, including header. */
     public static final int PAGE_SIZE = 4096;
 
@@ -26,6 +27,7 @@ public class BufferPool {
      */
     public BufferPool(int numPages) {
         // some code goes here
+        buffer = new Page[numPages];
     }
 
     /**
@@ -46,6 +48,20 @@ public class BufferPool {
     public  Page getPage(TransactionId tid, PageId pid, Permissions perm)
         throws TransactionAbortedException, DbException {
         // some code goes here
+        int emptyIdx = -1;
+        for (int i = 0;i < buffer.length;i++) {
+            if (buffer[i] == null) {
+                if (emptyIdx == -1)
+                    emptyIdx = i;
+            }
+            else if (buffer[i].getId() == pid) 
+                return buffer[i];
+        }
+        if (emptyIdx < 0)
+            throw new DbException("No free space in buffer pool.");
+        else {
+            buffer[emptyIdx] = Database.getCatalog().getDbFile(pid.getTableId()).readPage(pid);
+        }
         return null;
     }
 

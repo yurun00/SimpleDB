@@ -65,7 +65,7 @@ public class HeapPage implements Page {
     */
     private int getNumTuples() {        
         // some code goes here
-        return 0;
+        return (int)Math.floor((BufferPool.PAGE_SIZE * 8.0) / (td.getSize() * 8 + 1));
 
     }
 
@@ -74,9 +74,8 @@ public class HeapPage implements Page {
      * @return the number of bytes in the header of a page in a HeapFile with each tuple occupying tupleSize bytes
      */
     private int getHeaderSize() {        
-        
         // some code goes here
-        return 0;
+        return (int)Math.ceil(getNumTuples() / 8.0);
                  
     }
     
@@ -101,8 +100,9 @@ public class HeapPage implements Page {
      * @return the PageId associated with this page.
      */
     public HeapPageId getId() {
-    // some code goes here
-    throw new UnsupportedOperationException("implement this");
+        // some code goes here
+        return pid;
+        //throw new UnsupportedOperationException("implement this");
     }
 
     /**
@@ -273,7 +273,11 @@ public class HeapPage implements Page {
      */
     public int getNumEmptySlots() {
         // some code goes here
-        return 0;
+        int num = 0;
+        for (int i = 0;i < numSlots;i++) 
+            if (!getSlot(i))
+                num++;
+        return num;
     }
 
     /**
@@ -281,7 +285,7 @@ public class HeapPage implements Page {
      */
     public boolean getSlot(int i) {
         // some code goes here
-        return false;
+        return 0 != (header[i/8] & (1<<(i%8)));
     }
 
     /**
@@ -298,7 +302,29 @@ public class HeapPage implements Page {
      */
     public Iterator<Tuple> iterator() {
         // some code goes here
-        return null;
+        return new Iterator<Tuple>() {
+            private int idx = -1;
+
+            @Override    
+            public boolean hasNext() {
+                while(idx+1 < numSlots && !getSlot(idx+1))
+                    idx++;
+                return idx+1 < numSlots;
+            }
+
+            @Override
+            public Tuple next() {
+                if (hasNext())
+                    return tuples[++idx];
+                else
+                    throw new NoSuchElementException();
+            }
+
+            @Override
+            public void remove() {
+                throw new UnsupportedOperationException();
+            }
+        };
     }
 
 }
