@@ -303,7 +303,7 @@ public class HeapPage implements Page {
     public Iterator<Tuple> iterator() {
         // some code goes here
         return new Iterator<Tuple>() {
-            private int idx = -1;
+            private int idx=-1;
 
             @Override    
             public boolean hasNext() {

@@ -61,8 +61,8 @@ public class BufferPool {
             throw new DbException("No free space in buffer pool.");
         else {
             buffer[emptyIdx] = Database.getCatalog().getDbFile(pid.getTableId()).readPage(pid);
+            return buffer[emptyIdx];
         }
-        return null;
     }
 
     /**
