@@ -54,7 +54,7 @@ public class BufferPool {
                 if (emptyIdx == -1)
                     emptyIdx = i;
             }
-            else if (buffer[i].getId() == pid) 
+            else if (buffer[i].getId().equals(pid))
                 return buffer[i];
         }
         if (emptyIdx < 0)
