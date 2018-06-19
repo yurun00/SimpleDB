@@ -29,6 +29,9 @@ public class Predicate {
         }
     }
 
+    private int field;
+    private Op op;
+    private Field operand;
     /**
      * Constructor.
      *
@@ -38,6 +41,9 @@ public class Predicate {
      */
     public Predicate(int field, Op op, Field operand) {
         // some code goes here
+        this.field = field;
+        this.op = op;
+        this.operand = operand;
     }
 
     /**
@@ -51,7 +57,7 @@ public class Predicate {
      */
     public boolean filter(Tuple t) {
         // some code goes here
-        return false;
+        return t.getField(field).compare(op, operand);
     }
 
     /**
@@ -60,6 +66,6 @@ public class Predicate {
      */
     public String toString() {
         // some code goes here
-        return "";
+        return "field id: " + field + "cd ./, operator: " + op + ", operand: " + operand;
     }
 }
