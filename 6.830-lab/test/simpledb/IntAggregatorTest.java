@@ -75,6 +75,7 @@ public class IntAggregatorTest extends SimpleDbTestBase {
       DbIterator it = agg.iterator();
       TestUtil.matchAllTuples(TestUtil.createTupleList(width1, step), it);
     }
+    agg.printContent();
   }
 
   /**
@@ -150,6 +151,7 @@ public class IntAggregatorTest extends SimpleDbTestBase {
       // explicitly ignored
     }
     assertEquals(3, count);
+
 
     // rewind and try again
     it.rewind();

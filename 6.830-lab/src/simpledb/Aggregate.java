@@ -8,7 +8,9 @@ import java.util.*;
  * by a single column.
  */
 public class Aggregate extends AbstractDbIterator {
-
+    private DbIterator child;
+    private TupleDesc td;
+    private Aggregator agg;
     /**
      * Constructor.  
      *
@@ -21,8 +23,36 @@ public class Aggregate extends AbstractDbIterator {
      * @param gfield The column over which we are grouping the result, or -1 if there is no grouping
      * @param aop The aggregation operator to use
      */
-    public Aggregate(DbIterator child, int afield, int gfield, Aggregator.Op aop) {
+    public Aggregate(DbIterator child, int afield, int gfield, Aggregator.Op aop) 
+        throws DbException, TransactionAbortedException, NoSuchElementException {
         // some code goes here
+        TupleDesc ctd = child.getTupleDesc();
+        String aFieldName = ctd.getFieldName(afield) == null ? null : aggName(aop) + "(" + ctd.getFieldName(afield) + ")";
+        if (gfield == Aggregator.NO_GROUPING) {
+            td = new TupleDesc(new Type[]{ctd.getType(afield)}, 
+                new String[]{aFieldName});
+            agg = (ctd.getType(afield) == Type.INT_TYPE) ? 
+                new IntAggregator(Aggregator.NO_GROUPING, null, afield, aop) :
+                new StringAggregator(Aggregator.NO_GROUPING, null, afield, aop);
+        }
+        else {
+            td = new TupleDesc(new Type[]{ctd.getType(gfield), ctd.getType(afield)}, 
+                new String[]{ctd.getFieldName(gfield), aFieldName});
+            agg = (ctd.getType(afield) == Type.INT_TYPE) ? 
+                new IntAggregator(gfield, td.getType(0), afield, aop) :
+                new StringAggregator(gfield, td.getType(0), afield, aop);
+        }
+        try {
+            child.open();
+            while (child.hasNext()) {
+                agg.merge(child.next());
+            }
+            child.close();
+        }
+        catch(Exception e) {
+
+        }
+        this.child = agg.iterator();
     }
 
     public static String aggName(Aggregator.Op aop) {
@@ -44,6 +74,7 @@ public class Aggregate extends AbstractDbIterator {
     public void open()
         throws NoSuchElementException, DbException, TransactionAbortedException {
         // some code goes here
+        child.open();
     }
 
     /**
@@ -56,11 +87,15 @@ public class Aggregate extends AbstractDbIterator {
      */
     protected Tuple readNext() throws TransactionAbortedException, DbException {
         // some code goes here
+        while(child.hasNext()) {
+            return child.next();
+        }
         return null;
     }
 
     public void rewind() throws DbException, TransactionAbortedException {
         // some code goes here
+        child.rewind();
     }
 
     /**
@@ -76,10 +111,11 @@ public class Aggregate extends AbstractDbIterator {
      */
     public TupleDesc getTupleDesc() {
         // some code goes here
-        return null;
+        return td;
     }
 
     public void close() {
         // some code goes here
+        child.close();
     }
 }

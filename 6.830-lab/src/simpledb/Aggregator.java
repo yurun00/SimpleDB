@@ -6,6 +6,7 @@ package simpledb;
  */
 public interface Aggregator {
     static final int NO_GROUPING = -1;
+    static final Field DUMMY_FIELD = new StringField("", 0);
 
     public enum Op {
         MIN, MAX, SUM, AVG, COUNT;

@@ -1,9 +1,14 @@
 package simpledb;
-
+import java.util.*;
 /**
  * Knows how to compute some aggregate over a set of StringFields.
  */
 public class StringAggregator implements Aggregator {
+    private int gbfield, afield;
+    private Type gbfieldtype;
+    private Op what;
+    private TupleDesc td;
+    private HashMap<Field, Integer> cnts;
 
     /**
      * Aggregate constructor
@@ -14,8 +19,18 @@ public class StringAggregator implements Aggregator {
      * @throws IllegalArgumentException if what != COUNT
      */
 
-    public StringAggregator(int gbfield, Type gbfieldtype, int afield, Op what) {
+    public StringAggregator(int gbfield, Type gbfieldtype, int afield, Op what) throws IllegalArgumentException {
         // some code goes here
+        if (what != Op.COUNT)
+            throw new IllegalArgumentException();
+
+        this.gbfield = gbfield;
+        this.gbfieldtype = gbfieldtype;
+        this.afield = afield;
+        this.what = what;
+        this.cnts = new HashMap<Field, Integer>();
+        td = (gbfield == NO_GROUPING) ? new TupleDesc(new Type[]{Type.INT_TYPE}) :
+            new TupleDesc(new Type[]{gbfieldtype, Type.INT_TYPE});
     }
 
     /**
@@ -24,6 +39,11 @@ public class StringAggregator implements Aggregator {
      */
     public void merge(Tuple tup) {
         // some code goes here
+        Field key = (gbfield == NO_GROUPING) ? DUMMY_FIELD : tup.getField(gbfield);
+        if (cnts.containsKey(key))
+            cnts.put(key, cnts.get(key)+1);
+        else
+            cnts.put(key, 1);
     }
 
     /**
@@ -36,7 +56,49 @@ public class StringAggregator implements Aggregator {
      */
     public DbIterator iterator() {
         // some code goes here
-        throw new UnsupportedOperationException("implement me");
+        //throw new UnsupportedOperationException("implement me");
+        return new DbIterator() {
+            private Iterator<Field> child;
+
+            @Override
+            public void open() throws DbException, TransactionAbortedException {
+                child = cnts.keySet().iterator();
+            }
+
+            @Override
+            public boolean hasNext() throws DbException, TransactionAbortedException {
+                return child != null && child.hasNext();
+            }
+
+            @Override
+            public Tuple next() throws DbException, TransactionAbortedException, NoSuchElementException {
+                Tuple t = new Tuple(td);
+                Field key = child.next();
+                Integer val = cnts.get(key);
+                if (gbfield == NO_GROUPING)
+                    t.setField(0, new IntField(val));
+                else {
+                    t.setField(0, key);
+                    t.setField(1, new IntField(val));
+                }
+                return t;
+            }
+
+            @Override
+            public void rewind() throws DbException, TransactionAbortedException {
+                child = cnts.keySet().iterator();
+            }
+
+            @Override
+            public TupleDesc getTupleDesc() {
+                return td;
+            }
+
+            @Override
+            public void close() {
+                child = null;
+            }
+        };
     }
 
 }
