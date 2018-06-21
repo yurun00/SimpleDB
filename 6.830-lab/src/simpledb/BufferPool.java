@@ -1,6 +1,8 @@
 package simpledb;
 
 import java.io.*;
+import java.util.*;
+
 /**
  * BufferPool manages the reading and writing of pages into memory from
  * disk. Access methods call into it to retrieve pages, and it fetches
@@ -127,6 +129,9 @@ public class BufferPool {
         throws DbException, IOException, TransactionAbortedException {
         // some code goes here
         // not necessary for lab1
+        ArrayList<Page> pgAr = Database.getCatalog().getDbFile(tableId).addTuple(tid, t);
+        for (Page pg: pgAr)
+            pg.markDirty(true, tid);
     }
 
     /**
@@ -146,6 +151,9 @@ public class BufferPool {
         throws DbException, TransactionAbortedException {
         // some code goes here
         // not necessary for lab1
+        int tableid = t.getRecordId().getPageId().getTableId();
+        Page pg = Database.getCatalog().getDbFile(tableid).deleteTuple(tid, t);
+        pg.markDirty(true, tid);
     }
 
     /**
