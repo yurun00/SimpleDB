@@ -6,7 +6,10 @@ import java.util.*;
  * the tableid specified in the constructor
  */
 public class Insert extends AbstractDbIterator {
-
+    private TransactionId tid;
+    private DbIterator child;
+    private int tableid;
+    private boolean called;
     /**
      * Constructor.
      * @param t The transaction running the insert.
@@ -17,23 +20,33 @@ public class Insert extends AbstractDbIterator {
     public Insert(TransactionId t, DbIterator child, int tableid)
         throws DbException {
         // some code goes here
+        TupleDesc td = Database.getCatalog().getTupleDesc(tableid);
+        if (child.getTupleDesc().equals(td))
+        tid = t;
+        this.child = child;
+        this.tableid = tableid;
+        called = false;
     }
 
     public TupleDesc getTupleDesc() {
         // some code goes here
-        return null;
+        return new TupleDesc(new Type[]{Type.INT_TYPE});
     }
 
     public void open() throws DbException, TransactionAbortedException {
         // some code goes here
+        child.open();
     }
 
     public void close() {
         // some code goes here
+        child.close();
     }
 
     public void rewind() throws DbException, TransactionAbortedException {
         // some code goes here
+        child.rewind();
+        called = false;
     }
 
     /**
@@ -52,6 +65,24 @@ public class Insert extends AbstractDbIterator {
     protected Tuple readNext()
             throws TransactionAbortedException, DbException {
         // some code goes here
-        return null;
+        if (called)
+            return null;
+        called = true;
+
+        BufferPool bp = Database.getBufferPool();
+        int cnt = 0;
+        while (child.hasNext()) {
+            try {
+                Tuple t = child.next();
+                bp.insertTuple(tid, tableid, t);
+                cnt++;
+            }
+            catch (Exception e) {
+                throw new DbException("Insert failed.");
+            }
+        }
+        Tuple t = new Tuple(new TupleDesc(new Type[]{Type.INT_TYPE}));
+        t.setField(0, new IntField(cnt));
+        return t;
     }
 }
