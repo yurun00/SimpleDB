@@ -14,6 +14,7 @@ import java.util.*;
  */
 public class BufferPool {
     private Page[] buffer;
+    private int evictIdx;
     /** Bytes per page, including header. */
     public static final int PAGE_SIZE = 4096;
 
@@ -30,6 +31,7 @@ public class BufferPool {
     public BufferPool(int numPages) {
         // some code goes here
         buffer = new Page[numPages];
+        evictIdx = 0;
     }
 
     /**
@@ -55,12 +57,15 @@ public class BufferPool {
             if (buffer[i] == null) {
                 if (emptyIdx == -1)
                     emptyIdx = i;
+                break;
             }
             else if (buffer[i].getId().equals(pid))
                 return buffer[i];
         }
-        if (emptyIdx < 0)
-            throw new DbException("No free space in buffer pool.");
+        if (emptyIdx < 0) {
+            evictPage();
+            return getPage(tid, pid, perm);
+        }
         else {
             buffer[emptyIdx] = Database.getCatalog().getDbFile(pid.getTableId()).readPage(pid);
             return buffer[emptyIdx];
@@ -164,7 +169,13 @@ public class BufferPool {
     public synchronized void flushAllPages() throws IOException {
         // some code goes here
         // not necessary for lab1
-
+        for (int i = 0;i < buffer.length;i++) {
+            if (buffer[i] != null && buffer[i].isDirty() != null) {
+                HeapFile df = (HeapFile)Database.getCatalog().getDbFile(buffer[i].getId().getTableId());
+                df.writePage(buffer[i]);
+                buffer[i].markDirty(false, null);
+            }
+        }
     }
 
     /** Remove the specific page id from the buffer pool.
@@ -181,9 +192,18 @@ public class BufferPool {
      * Flushes a certain page to disk
      * @param pid an ID indicating the page to flush
      */
-    private synchronized  void flushPage(PageId pid) throws IOException {
+    private synchronized  void flushPage(PageId pid) throws IOException, DbException {
         // some code goes here
         // not necessary for lab1
+        int i = 0;
+        for (;i < buffer.length;i++) {
+            if (buffer[i] != null && buffer[i].getId().equals(pid) && buffer[i].isDirty() != null) {
+                HeapFile df = (HeapFile)Database.getCatalog().getDbFile(pid.getTableId());
+                df.writePage(buffer[i]);
+                buffer[i].markDirty(false, null);
+                break;
+            }
+        }
     }
 
     /** Write all pages of the specified transaction to disk.
@@ -200,6 +220,34 @@ public class BufferPool {
     private synchronized  void evictPage() throws DbException {
         // some code goes here
         // not necessary for lab1
+        /*int maxIdx = evictIdx + DEFAULT_PAGES;
+        for (;evictIdx < maxIdx;evictIdx++) {
+            if (buffer[evictIdx] == null) {
+                evictIdx++;
+                return ;
+            }
+            else if (buffer[evictIdx].isDirty() == null) {
+                try {
+                    flushPage(buffer[evictIdx].getId());
+                    buffer[evictIdx] = null;
+                    evictIdx++;
+                    return ;
+                }
+                catch (Exception e) {
+                    throw new DbException(e.getMessage());
+                }
+            }
+            else ;
+        }*/
+        try {
+            flushPage(buffer[evictIdx].getId());
+            buffer[evictIdx] = null;
+            evictIdx = (evictIdx+1) % buffer.length;
+            return ;
+        }
+        catch (Exception e) {
+            throw new DbException(e.getMessage());
+        }  
     }
 
 }
