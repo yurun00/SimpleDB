@@ -78,9 +78,9 @@ public class TupleDesc {
      */
     public String getFieldName(int i) throws NoSuchElementException {
         // some code goes here
-        if (i >= numFields())
+        if (i >= numFields() || i < 0)
             throw new NoSuchElementException();
-        return null;
+        return fieldAr[i];
     }
 
     /**
@@ -92,6 +92,7 @@ public class TupleDesc {
      */
     public int nameToId(String name) throws NoSuchElementException {
         // some code goes here
+        System.out.println(name);
         if (name == null)
             throw new NoSuchElementException();
         
@@ -119,7 +120,7 @@ public class TupleDesc {
      */
     public Type getType(int i) throws NoSuchElementException {
         // some code goes here
-        if (i >= numFields())
+        if (i >= numFields() || i < 0)
             throw new NoSuchElementException();
         return typeAr[i];
     }

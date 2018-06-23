@@ -92,7 +92,9 @@ $ java -jar dist/simpledb.jar parser catalog.txt
 One can see the output like
 
 ```
-$ Added table : data with schema INT(f1), INT(f2),
+$ Added table : data with schema int(f1), int(f2)
+$ Computing table stats.
+$ Done.
 $ SimpleDB>
 ```
 
@@ -101,8 +103,8 @@ Finally, one can run query
 ```
 SimpleDB> select d.f1, d.f2 from data d;
 Started a new transaction tid = 1221852405823
- ADDING TABLE d(data) TO tableMap
-     TABLE HAS tupleDesc INT(d.f1), INT(d.f2),
+ADDING TABLE d(data) TO tableMap
+TABLE HAS tupleDesc INT(d.f1), INT(d.f2),
 1 10
 2 20
 3 30
@@ -110,7 +112,7 @@ Started a new transaction tid = 1221852405823
 5 50
 5 50
 
- 6 rows.
+6 rows.
 ----------------
 0.16 seconds
 SimpleDB>
