@@ -15,6 +15,7 @@ import java.util.*;
 public class BufferPool {
     private Page[] buffer;
     private int evictIdx;
+    private LockManager lm;
     /** Bytes per page, including header. */
     public static final int PAGE_SIZE = 4096;
 
@@ -32,6 +33,7 @@ public class BufferPool {
         // some code goes here
         buffer = new Page[numPages];
         evictIdx = 0;
+        lm = new LockManager(numPages);
     }
 
     /**
@@ -51,6 +53,7 @@ public class BufferPool {
      */
     public  Page getPage(TransactionId tid, PageId pid, Permissions perm)
         throws TransactionAbortedException, DbException {
+
         // some code goes here
         int emptyIdx = -1;
         for (int i = 0;i < buffer.length;i++) {
@@ -59,15 +62,30 @@ public class BufferPool {
                     emptyIdx = i;
                 break;
             }
-            else if (buffer[i].getId().equals(pid))
+            else if (buffer[i].getId().equals(pid)) {
+                //System.out.println(tid.getId() + " get page " + i);
+                try {
+                    lm.acquireLock(tid, i, perm);
+                }
+                catch (Exception e) {
+                    System.out.println(e.getMessage());
+                }
                 return buffer[i];
+            }
         }
         if (emptyIdx < 0) {
             evictPage();
             return getPage(tid, pid, perm);
         }
         else {
+            //System.out.println(tid.getId() + " get page " + emptyIdx);            
             buffer[emptyIdx] = Database.getCatalog().getDbFile(pid.getTableId()).readPage(pid);
+            try {
+                lm.acquireLock(tid, emptyIdx, perm);
+            }
+            catch (Exception e) {
+                System.out.println(e.getMessage());
+            }
             return buffer[emptyIdx];
         }
     }
@@ -84,6 +102,10 @@ public class BufferPool {
     public  void releasePage(TransactionId tid, PageId pid) {
         // some code goes here
         // not necessary for lab1|lab2
+        for (int i = 0;i < buffer.length;i++) {
+            if (buffer[i] != null && buffer[i].getId().equals(pid))
+                lm.releaseLock(tid, i);
+        }
     }
 
     /**
@@ -97,9 +119,14 @@ public class BufferPool {
     }
 
     /** Return true if the specified transaction has a lock on the specified page */
-    public   boolean holdsLock(TransactionId tid, PageId p) {
+    public   boolean holdsLock(TransactionId tid, PageId pid) {
         // some code goes here
         // not necessary for lab1|lab2
+        for (int i = 0;i < buffer.length;i++) {
+            if (buffer[i] != null && buffer[i].getId().equals(pid)) {
+                return lm.holdsLock(tid, i);
+            }
+        }
         return false;
     }
 
