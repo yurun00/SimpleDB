@@ -5,128 +5,135 @@ import java.util.*;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 public class LockManager {
-	private Object[] mutexes;
-	private List<Set<TransactionId>> readLockHolders; 
-	private List<TransactionId> writeLockHolders;
-	private int[] writers;
+	private Map<Integer, Object> mutexes;
+	private Map<Integer, HashSet<TransactionId>> readLockHolders; 
+	private Map<Integer, TransactionId> writeLockHolders;
+	private Map<Integer, Integer> writers;
 
-	public LockManager(int numPages) {
-		mutexes = new Object[numPages];
-		readLockHolders = new ArrayList<Set<TransactionId>>(numPages);
-		writeLockHolders = new ArrayList<TransactionId>(numPages);
-		writers = new int[numPages];
-		for (int i = 0;i < numPages;i++) {
-			mutexes[i] = new Object();
-			readLockHolders.add(new HashSet<TransactionId>());
-			writeLockHolders.add(null);
+	//private evicted
+
+	public LockManager() {
+		mutexes = new HashMap<Integer, Object>();
+		readLockHolders = new HashMap<Integer, HashSet<TransactionId>>();
+		writeLockHolders = new HashMap<Integer, TransactionId>();
+		writers = new HashMap<Integer, Integer>();
+	}
+
+	public void addLock(int pghc) {
+		if (!mutexes.containsKey(pghc)) {
+			mutexes.put(pghc, new Object());
+			readLockHolders.put(pghc, new HashSet<TransactionId>());
+			writeLockHolders.put(pghc, null);
+			writers.put(pghc, 0);
 		}
 	}
 
-	public boolean holdsReadLock(TransactionId tid, int pgIdx) {
-		synchronized(mutexes[pgIdx]) {
-			return readLockHolders.get(pgIdx).contains(tid);
+	private boolean holdsReadLock(TransactionId tid, int pghc) {
+		synchronized(mutexes.get(pghc)) {
+			return readLockHolders.get(pghc).contains(tid);
 		}
 	}
 
-	public boolean holdsWriteLock(TransactionId tid, int pgIdx) {
-		synchronized(mutexes[pgIdx]) {
-			return writeLockHolders.get(pgIdx) != null && writeLockHolders.get(pgIdx).equals(tid);
+	private boolean holdsWriteLock(TransactionId tid, int pghc) {
+		synchronized(mutexes.get(pghc)) {
+			return writeLockHolders.get(pghc) != null && writeLockHolders.get(pghc).equals(tid);
 		}
 	}
 
-	public boolean holdsLock(TransactionId tid, int pgIdx) {
-		return holdsReadLock(tid, pgIdx) || holdsWriteLock(tid, pgIdx);
+	public boolean holdsLock(TransactionId tid, int pghc) {
+		return holdsReadLock(tid, pghc) || holdsWriteLock(tid, pghc);
 	}
 
-	boolean hasOtherWriters(TransactionId tid, int pgIdx) {
-		synchronized(mutexes[pgIdx]) {
-			return  writeLockHolders.get(pgIdx) != null && !writeLockHolders.get(pgIdx).equals(tid);
+	private boolean hasOtherWriters(TransactionId tid, int pghc) {
+		synchronized(mutexes.get(pghc)) {
+			return  writeLockHolders.get(pghc) != null && !writeLockHolders.get(pghc).equals(tid);
 		}
 	}
 
-	public boolean acquireReadLock(TransactionId tid, int pgIdx) throws InterruptedException {
+	private boolean acquireReadLock(TransactionId tid, int pghc) throws InterruptedException {
 		// Transaction already holds the read/write lock on this page.
-		if (holdsReadLock(tid, pgIdx))
+		if (holdsReadLock(tid, pghc))
 			return false;
-		synchronized(mutexes[pgIdx]) {
+		synchronized(mutexes.get(pghc)) {
 			// If some other transaction holds the write lock on this page, this transaction will be blocked.
-			while (hasOtherWriters(tid, pgIdx)) {
-				mutexes[pgIdx].wait();
+			while (hasOtherWriters(tid, pghc)) {
+				mutexes.get(pghc).wait();
 			}
-			readLockHolders.get(pgIdx).add(tid);
+			readLockHolders.get(pghc).add(tid);
 			return true;
 		}
 	}
 
-	public boolean releaseReadLock(TransactionId tid, int pgIdx) {
+	private boolean releaseReadLock(TransactionId tid, int pghc) {
 		// Transaction does not hold the read lock on this page.
-		if (!holdsReadLock(tid, pgIdx))
+		if (!holdsReadLock(tid, pghc))
 			return false;
-		synchronized(mutexes[pgIdx]) {
-			readLockHolders.get(pgIdx).remove(tid);
-			if (readLockHolders.get(pgIdx).isEmpty())
-				mutexes[pgIdx].notify();
+		synchronized(mutexes.get(pghc)) {
+			readLockHolders.get(pghc).remove(tid);
+			if (readLockHolders.get(pghc).isEmpty())
+				mutexes.get(pghc).notify();
 			return true;
 		}
 	}
 
-	boolean hasOtherReaders(TransactionId tid, int pgIdx) {
-		synchronized(mutexes[pgIdx]) {
-			return  readLockHolders.get(pgIdx).size() > 1 || 
-				(readLockHolders.get(pgIdx).size() == 1 && !readLockHolders.get(pgIdx).contains(tid));
+	boolean hasOtherReaders(TransactionId tid, int pghc) {
+		synchronized(mutexes.get(pghc)) {
+			return  readLockHolders.get(pghc).size() > 1 || 
+				(readLockHolders.get(pghc).size() == 1 && !readLockHolders.get(pghc).contains(tid));
 		}
 	}
 
-	public boolean acquireWriteLock(TransactionId tid, int pgIdx) throws InterruptedException {
+	public boolean acquireWriteLock(TransactionId tid, int pghc) throws InterruptedException {
 		// Transaction already holds the write lock on this page.
-		if (holdsWriteLock(tid, pgIdx)) {
+		if (holdsWriteLock(tid, pghc)) {
 			return false;
 		}
-		synchronized(mutexes[pgIdx]) {
-			writers[pgIdx]++;
-			while (hasOtherReaders(tid, pgIdx) || writeLockHolders.get(pgIdx) != null) {
-				mutexes[pgIdx].wait();
+		synchronized(mutexes.get(pghc)) {
+			writers.put(pghc, writers.get(pghc)+1);
+			while (hasOtherReaders(tid, pghc) || writeLockHolders.get(pghc) != null) {
+				mutexes.get(pghc).wait();
 			}
 			// Upgrade the read lock to the write lock
-			readLockHolders.get(pgIdx).remove(tid);
-			writeLockHolders.set(pgIdx, tid);
+			readLockHolders.get(pghc).remove(tid);
+			writeLockHolders.put(pghc, tid);
 			return true;
 		}
 	}
 
-	public boolean releaseWriteLock(TransactionId tid, int pgIdx) {
+	public boolean releaseWriteLock(TransactionId tid, int pghc) {
 		// Transaction does not hold the write lock on this page.
-		if (!holdsWriteLock(tid, pgIdx))
+		if (!holdsWriteLock(tid, pghc))
 			return false;
-		synchronized(mutexes[pgIdx]) {
-			writers[pgIdx]--;
-			writeLockHolders.set(pgIdx, null);
-			mutexes[pgIdx].notifyAll();
+		synchronized(mutexes.get(pghc)) {
+			writers.put(pghc, writers.get(pghc)-1);
+			writeLockHolders.put(pghc, null);
+			mutexes.get(pghc).notifyAll();
 			return true;
 		}
 	}
 
-	public boolean acquireLock(TransactionId tid, int pgIdx, Permissions perm) throws InterruptedException {
+	public boolean acquireLock(TransactionId tid, int pghc, Permissions perm) throws InterruptedException {
 		try {
 			if (perm.equals(Permissions.READ_ONLY)) 
-				return acquireReadLock(tid, pgIdx);
+				return acquireReadLock(tid, pghc);
 			else 
-				return acquireWriteLock(tid, pgIdx);
+				return acquireWriteLock(tid, pghc);
 		}
 		catch (InterruptedException e) {
-			for (int i = 0;i < mutexes.length;i++) {
-				releaseLock(tid, i);
+			Iterator<Integer> it = mutexes.keySet().iterator();
+			while(it.hasNext()) {
+				releaseLock(tid, it.next());
 			}
 			if (perm.equals(Permissions.READ_WRITE)) {
-				synchronized (mutexes[pgIdx]) {
-					writers[pgIdx]--;
+				synchronized (mutexes.get(pghc)) {
+					writers.put(pghc, writers.get(pghc)-1);
 				}
 			}
 			throw new InterruptedException();
 		}
 	}
 
-	public boolean releaseLock(TransactionId tid, int pgIdx) {
-		return releaseReadLock(tid, pgIdx) || releaseWriteLock(tid, pgIdx);
+	public boolean releaseLock(TransactionId tid, int pghc) {
+		return releaseReadLock(tid, pghc) || releaseWriteLock(tid, pghc);
 	}
 }

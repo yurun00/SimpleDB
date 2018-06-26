@@ -41,7 +41,8 @@ public class HeapPageId implements PageId {
      */
     public int hashCode() {
         // some code goes here
-        return getTableId() * 64 + pageno();
+        String hash = "" + tableId + "#" + pgNo;
+        return hash.hashCode();
         //throw new UnsupportedOperationException("implement this");
     }
 

@@ -33,7 +33,7 @@ public class BufferPool {
         // some code goes here
         buffer = new Page[numPages];
         evictIdx = 0;
-        lm = new LockManager(numPages);
+        lm = new LockManager();
     }
 
     /**
@@ -53,8 +53,17 @@ public class BufferPool {
      */
     public  Page getPage(TransactionId tid, PageId pid, Permissions perm)
         throws TransactionAbortedException, DbException {
-
         // some code goes here
+        // Acquire the lock first
+        lm.addLock(pid.hashCode());
+        try {
+            lm.acquireLock(tid, pid.hashCode(), perm);
+        }
+        catch (Exception e) {
+            System.out.println("Error in getPage, " + e.getMessage());
+        }
+
+        // Load the page and return
         int emptyIdx = -1;
         for (int i = 0;i < buffer.length;i++) {
             if (buffer[i] == null) {
@@ -63,13 +72,6 @@ public class BufferPool {
                 break;
             }
             else if (buffer[i].getId().equals(pid)) {
-                //System.out.println(tid.getId() + " get page " + i);
-                try {
-                    lm.acquireLock(tid, i, perm);
-                }
-                catch (Exception e) {
-                    System.out.println(e.getMessage());
-                }
                 return buffer[i];
             }
         }
@@ -77,15 +79,8 @@ public class BufferPool {
             evictPage();
             return getPage(tid, pid, perm);
         }
-        else {
-            //System.out.println(tid.getId() + " get page " + emptyIdx);            
+        else {           
             buffer[emptyIdx] = Database.getCatalog().getDbFile(pid.getTableId()).readPage(pid);
-            try {
-                lm.acquireLock(tid, emptyIdx, perm);
-            }
-            catch (Exception e) {
-                System.out.println(e.getMessage());
-            }
             return buffer[emptyIdx];
         }
     }
@@ -104,7 +99,7 @@ public class BufferPool {
         // not necessary for lab1|lab2
         for (int i = 0;i < buffer.length;i++) {
             if (buffer[i] != null && buffer[i].getId().equals(pid))
-                lm.releaseLock(tid, i);
+                lm.releaseLock(tid, pid.hashCode());
         }
     }
 
