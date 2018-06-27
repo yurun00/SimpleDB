@@ -132,20 +132,22 @@ public class HeapFile implements DbFile {
         int tableid = getId(), pgno = 0;
         for (;pgno < numPages();pgno++) {
             PageId pid = new HeapPageId(tableid, pgno);
-            HeapPage pg = (HeapPage)Database.getBufferPool().getPage(tid, pid, Permissions.READ_WRITE);
+            HeapPage pg = (HeapPage)Database.getBufferPool().getPage(tid, pid, Permissions.READ_ONLY);
             if (pg.getNumEmptySlots() > 0) {
-                pg.addTuple(t);
-                pgAr.add(pg);
-                break;
+                HeapPage wpg = (HeapPage)Database.getBufferPool().getPage(tid, pid, Permissions.READ_WRITE);
+                wpg.addTuple(t);
+                pgAr.add(wpg);
+                return pgAr;
             }
+            /*else {
+                Database.getBufferPool().releasePage(tid, pg.getId());
+            }*/
         }
-        if (pgno == numPages()) {
-            byte[] data = HeapPage.createEmptyPageData();
-            HeapPage pg = new HeapPage(new HeapPageId(tableid, pgno), data);
-            pg.addTuple(t);
-            pgAr.add(pg);
-            writePage(pg);
-        }
+        byte[] data = HeapPage.createEmptyPageData();
+        HeapPage pg = new HeapPage(new HeapPageId(tableid, pgno), data);
+        pg.addTuple(t);
+        pgAr.add(pg);
+        writePage(pg);
         return pgAr;
         // not necessary for lab1
     }
@@ -154,11 +156,6 @@ public class HeapFile implements DbFile {
     public Page deleteTuple(TransactionId tid, Tuple t)
         throws DbException, TransactionAbortedException {
         // some code goes here
-        /*RecordId rid = t.getRecordId();
-        PageId pid = rid.getPageId();
-        int tableId = pid.getTableId();
-        int pn = pid.pageno();
-        int tn = rid.tupleno();*/
         PageId pid = t.getRecordId().getPageId();
         HeapPage pg = (HeapPage)Database.getBufferPool().getPage(tid, pid, Permissions.READ_WRITE);
         pg.deleteTuple(t);

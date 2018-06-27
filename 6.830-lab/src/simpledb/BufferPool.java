@@ -16,6 +16,7 @@ public class BufferPool {
     private Page[] buffer;
     private int evictIdx;
     private LockManager lm;
+    private Map<TransactionId, HashSet<PageId>> hasPages;
     /** Bytes per page, including header. */
     public static final int PAGE_SIZE = 4096;
 
@@ -32,8 +33,9 @@ public class BufferPool {
     public BufferPool(int numPages) {
         // some code goes here
         buffer = new Page[numPages];
-        evictIdx = 0;
+        evictIdx = -1;
         lm = new LockManager();
+        hasPages = new HashMap<TransactionId, HashSet<PageId>>();
     }
 
     /**
@@ -55,6 +57,10 @@ public class BufferPool {
         throws TransactionAbortedException, DbException {
         // some code goes here
         // Acquire the lock first
+        if (!hasPages.containsKey(tid))
+            hasPages.put(tid, new HashSet<PageId>());
+        hasPages.get(tid).add(pid); 
+        
         lm.addLock(pid.hashCode());
         try {
             lm.acquireLock(tid, pid.hashCode(), perm);
@@ -79,7 +85,7 @@ public class BufferPool {
             evictPage();
             return getPage(tid, pid, perm);
         }
-        else {           
+        else {
             buffer[emptyIdx] = Database.getCatalog().getDbFile(pid.getTableId()).readPage(pid);
             return buffer[emptyIdx];
         }
@@ -97,10 +103,11 @@ public class BufferPool {
     public  void releasePage(TransactionId tid, PageId pid) {
         // some code goes here
         // not necessary for lab1|lab2
-        for (int i = 0;i < buffer.length;i++) {
+        lm.releaseLock(tid, pid.hashCode());
+        /*for (int i = 0;i < buffer.length;i++) {
             if (buffer[i] != null && buffer[i].getId().equals(pid))
-                lm.releaseLock(tid, pid.hashCode());
-        }
+                
+        }*/
     }
 
     /**
@@ -111,6 +118,7 @@ public class BufferPool {
     public  void transactionComplete(TransactionId tid) throws IOException {
         // some code goes here
         // not necessary for lab1|lab2
+        transactionComplete(tid, true);
     }
 
     /** Return true if the specified transaction has a lock on the specified page */
@@ -136,6 +144,22 @@ public class BufferPool {
         throws IOException {
         // some code goes here
         // not necessary for lab1|lab2
+        /*if (commit) {
+            flushPages(tid);
+        }*/
+        if (!commit) {
+            for (int i = 0;i < buffer.length;i++) {
+                if (buffer[i] != null && 
+                    (tid.equals(buffer[i].isDirty()) || lm.holdsWriteLock(tid, buffer[i].getId().hashCode()))) {
+                    buffer[i] = null;
+                }
+            }
+        }
+        Iterator<PageId> it = hasPages.get(tid).iterator();
+        while(it.hasNext()) {
+            releasePage(tid, it.next());
+        }
+        hasPages.remove(tid);
     }
 
     /**
@@ -188,14 +212,15 @@ public class BufferPool {
      * NB: Be careful using this routine -- it writes dirty data to disk so will
      *     break simpledb if running in NO STEAL mode.
      */
-    public synchronized void flushAllPages() throws IOException {
+    public synchronized void flushAllPages() throws IOException, DbException {
         // some code goes here
         // not necessary for lab1
         for (int i = 0;i < buffer.length;i++) {
-            if (buffer[i] != null && buffer[i].isDirty() != null) {
-                HeapFile df = (HeapFile)Database.getCatalog().getDbFile(buffer[i].getId().getTableId());
-                df.writePage(buffer[i]);
-                buffer[i].markDirty(false, null);
+            try{
+                flushPage(i);
+            }
+            catch (Exception e) {
+                System.out.println("Exception in flushAllPages(). " + e.getMessage());
             }
         }
     }
@@ -220,11 +245,19 @@ public class BufferPool {
         int i = 0;
         for (;i < buffer.length;i++) {
             if (buffer[i] != null && buffer[i].getId().equals(pid) && buffer[i].isDirty() != null) {
-                HeapFile df = (HeapFile)Database.getCatalog().getDbFile(pid.getTableId());
-                df.writePage(buffer[i]);
+                HeapFile hf = (HeapFile)Database.getCatalog().getDbFile(pid.getTableId());
+                hf.writePage(buffer[i]);
                 buffer[i].markDirty(false, null);
                 break;
             }
+        }
+    }
+
+    private synchronized  void flushPage(int pgIdx) throws IOException, DbException {
+        if (buffer[pgIdx] != null && buffer[pgIdx].isDirty() != null) {
+            HeapFile hf = (HeapFile)Database.getCatalog().getDbFile(buffer[pgIdx].getId().getTableId());
+            hf.writePage(buffer[pgIdx]);
+            buffer[pgIdx].markDirty(false, null);
         }
     }
 
@@ -233,43 +266,47 @@ public class BufferPool {
     public synchronized  void flushPages(TransactionId tid) throws IOException {
         // some code goes here
         // not necessary for lab1|lab2|lab3
+        for (int i = 0;i < buffer.length;i++) {
+            if (buffer[i] != null && hasPages.get(tid).contains(buffer[i].getId()) && tid.equals(buffer[i].isDirty())) {
+                HeapFile hf = (HeapFile)Database.getCatalog().getDbFile(buffer[i].getId().getTableId());
+                hf.writePage(buffer[i]);
+                buffer[i].markDirty(false, null);
+            }
+        }
     }
 
     /**
      * Discards a page from the buffer pool.
      * Flushes the page to disk to ensure dirty pages are updated on disk.
+     * For the sake of NO STEAL policy, dirty pages and pages with write lock cannot be 
+     * evicted. If no page can be evicted, throw a DbException.
      */
     private synchronized  void evictPage() throws DbException {
         // some code goes here
         // not necessary for lab1
-        /*int maxIdx = evictIdx + DEFAULT_PAGES;
-        for (;evictIdx < maxIdx;evictIdx++) {
-            if (buffer[evictIdx] == null) {
-                evictIdx++;
+        int i = 0;
+        for (;i < buffer.length;i++) {
+            evictIdx = (evictIdx+1) % buffer.length;
+            if (buffer[evictIdx] == null || 
+                (buffer[evictIdx].isDirty() == null && !lm.writeLockHeld(buffer[evictIdx].getId().hashCode()))) {
+                break;
+            }
+        }
+        //System.out.println("evict index end at " + evictIdx);
+        //lm.show();
+        if (i == buffer.length) {
+            throw new DbException("No page can be evicted.");
+        }
+        if (buffer[evictIdx] != null) {
+            try {
+                flushPage(evictIdx);
+                buffer[evictIdx] = null;
                 return ;
             }
-            else if (buffer[evictIdx].isDirty() == null) {
-                try {
-                    flushPage(buffer[evictIdx].getId());
-                    buffer[evictIdx] = null;
-                    evictIdx++;
-                    return ;
-                }
-                catch (Exception e) {
-                    throw new DbException(e.getMessage());
-                }
-            }
-            else ;
-        }*/
-        try {
-            flushPage(buffer[evictIdx].getId());
-            buffer[evictIdx] = null;
-            evictIdx = (evictIdx+1) % buffer.length;
-            return ;
+            catch (Exception e) {
+                throw new DbException(e.getMessage());
+            } 
         }
-        catch (Exception e) {
-            throw new DbException(e.getMessage());
-        }  
     }
 
 }

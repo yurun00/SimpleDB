@@ -19,12 +19,55 @@ public class LockManager {
 		writers = new HashMap<Integer, Integer>();
 	}
 
-	public void addLock(int pghc) {
+	public void show() {
+		System.out.println("----------Lock manager content----------");
+		System.out.println("Pages hash:");
+		Iterator<Integer> it = mutexes.keySet().iterator();
+		while (it.hasNext())
+			System.out.println(it.next());
+
+		System.out.println("----------");
+		System.out.println("Read lock holders: ");
+		it = readLockHolders.keySet().iterator();
+		while (it.hasNext()) {
+			int ph = it.next();
+			String s = "";
+			Iterator<TransactionId> it1 = readLockHolders.get(ph).iterator();
+			while (it1.hasNext())
+				s += ", " + it1.next().getId();
+			System.out.println("page hash: " + ph + s);
+		}
+
+		System.out.println("----------");
+		System.out.println("Write lock holders: ");
+		it = writeLockHolders.keySet().iterator();
+		while (it.hasNext()) {
+			int ph = it.next();
+			TransactionId ti = writeLockHolders.get(ph);
+			System.out.println("page hash: " + ph + ", " + (ti != null ? ti.getId() : null));
+		}
+
+		System.out.println("----------");
+		System.out.println("Writers number: ");
+		it = writers.keySet().iterator();
+		while (it.hasNext()) {
+			int ph = it.next();
+			System.out.println("page hash: " + ph + ", " + writers.get(ph));
+		}
+	}
+
+	public synchronized void addLock(int pghc) {
 		if (!mutexes.containsKey(pghc)) {
 			mutexes.put(pghc, new Object());
 			readLockHolders.put(pghc, new HashSet<TransactionId>());
 			writeLockHolders.put(pghc, null);
 			writers.put(pghc, 0);
+		}
+	}
+
+	public boolean writeLockHeld(int pghc) {
+		synchronized(mutexes.get(pghc)) {
+			return writeLockHolders.get(pghc) != null;
 		}
 	}
 
@@ -34,7 +77,7 @@ public class LockManager {
 		}
 	}
 
-	private boolean holdsWriteLock(TransactionId tid, int pghc) {
+	public boolean holdsWriteLock(TransactionId tid, int pghc) {
 		synchronized(mutexes.get(pghc)) {
 			return writeLockHolders.get(pghc) != null && writeLockHolders.get(pghc).equals(tid);
 		}
@@ -134,6 +177,8 @@ public class LockManager {
 	}
 
 	public boolean releaseLock(TransactionId tid, int pghc) {
-		return releaseReadLock(tid, pghc) || releaseWriteLock(tid, pghc);
+		boolean b1 = releaseReadLock(tid, pghc);
+		boolean b2 = releaseWriteLock(tid, pghc);
+		return b1 || b2;
 	}
 }
