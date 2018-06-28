@@ -5,10 +5,12 @@ import java.util.*;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 public class LockManager {
-	private Map<Integer, Object> mutexes;
-	private Map<Integer, HashSet<TransactionId>> readLockHolders; 
-	private Map<Integer, TransactionId> writeLockHolders;
-	private Map<Integer, Integer> writers;
+	private final Map<Integer, Object> mutexes;
+	private final Map<Integer, HashSet<TransactionId>> readLockHolders; 
+	private final Map<Integer, TransactionId> writeLockHolders;
+	private final Map<Integer, Integer> writers;
+	private final Random rand;
+	private final int WAIT_TIME = 100, TIME_RANGE = 1000;
 
 	//private evicted
 
@@ -17,6 +19,7 @@ public class LockManager {
 		readLockHolders = new HashMap<Integer, HashSet<TransactionId>>();
 		writeLockHolders = new HashMap<Integer, TransactionId>();
 		writers = new HashMap<Integer, Integer>();
+		rand = new Random();
 	}
 
 	public void show() {
@@ -98,11 +101,21 @@ public class LockManager {
 		if (holdsReadLock(tid, pghc))
 			return false;
 		synchronized(mutexes.get(pghc)) {
+			final Thread thread = Thread.currentThread();
+			Timer timer = new Timer();
+			timer.schedule(new TimerTask() {
+				@Override
+				public void run() {
+					thread.interrupt();
+				}
+			}, WAIT_TIME + rand.nextInt(TIME_RANGE));
+
 			// If some other transaction holds the write lock on this page, this transaction will be blocked.
 			while (hasOtherWriters(tid, pghc)) {
 				mutexes.get(pghc).wait();
 			}
 			readLockHolders.get(pghc).add(tid);
+			timer.cancel();
 			return true;
 		}
 	}
@@ -132,6 +145,15 @@ public class LockManager {
 			return false;
 		}
 		synchronized(mutexes.get(pghc)) {
+			final Thread thread = Thread.currentThread();
+			Timer timer = new Timer();
+			timer.schedule(new TimerTask() {
+				@Override
+				public void run() {
+					thread.interrupt();
+				}
+			}, WAIT_TIME + rand.nextInt(TIME_RANGE));
+
 			writers.put(pghc, writers.get(pghc)+1);
 			while (hasOtherReaders(tid, pghc) || writeLockHolders.get(pghc) != null) {
 				mutexes.get(pghc).wait();
@@ -139,6 +161,7 @@ public class LockManager {
 			// Upgrade the read lock to the write lock
 			readLockHolders.get(pghc).remove(tid);
 			writeLockHolders.put(pghc, tid);
+			timer.cancel();
 			return true;
 		}
 	}
@@ -155,7 +178,9 @@ public class LockManager {
 		}
 	}
 
-	public boolean acquireLock(TransactionId tid, int pghc, Permissions perm) throws InterruptedException {
+	public boolean acquireLock(TransactionId tid, int pghc, Permissions perm) throws InterruptedException, TransactionAbortedException {
+		if (tid == null)
+			return false;
 		try {
 			if (perm.equals(Permissions.READ_ONLY)) 
 				return acquireReadLock(tid, pghc);
@@ -172,11 +197,13 @@ public class LockManager {
 					writers.put(pghc, writers.get(pghc)-1);
 				}
 			}
-			throw new InterruptedException();
+			throw new InterruptedException("Deadlock detected.");
 		}
 	}
 
 	public boolean releaseLock(TransactionId tid, int pghc) {
+		if (tid == null)
+			return false;
 		boolean b1 = releaseReadLock(tid, pghc);
 		boolean b2 = releaseWriteLock(tid, pghc);
 		return b1 || b2;

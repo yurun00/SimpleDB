@@ -62,6 +62,9 @@ public class Delete extends AbstractDbIterator {
                 bp.deleteTuple(tid, t);
                 cnt++;
             }
+            catch (TransactionAbortedException e) {
+                throw e;
+            }
             catch (Exception e) {
                 throw new DbException("Delete failed.");
             }

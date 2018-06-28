@@ -16,7 +16,7 @@ public class BufferPool {
     private Page[] buffer;
     private int evictIdx;
     private LockManager lm;
-    private Map<TransactionId, HashSet<PageId>> hasPages;
+    private Map<Long, HashSet<PageId>> hasPages;
     /** Bytes per page, including header. */
     public static final int PAGE_SIZE = 4096;
 
@@ -35,7 +35,7 @@ public class BufferPool {
         buffer = new Page[numPages];
         evictIdx = -1;
         lm = new LockManager();
-        hasPages = new HashMap<TransactionId, HashSet<PageId>>();
+        hasPages = new HashMap<Long, HashSet<PageId>>();
     }
 
     /**
@@ -56,17 +56,25 @@ public class BufferPool {
     public  Page getPage(TransactionId tid, PageId pid, Permissions perm)
         throws TransactionAbortedException, DbException {
         // some code goes here
-        // Acquire the lock first
-        if (!hasPages.containsKey(tid))
-            hasPages.put(tid, new HashSet<PageId>());
-        hasPages.get(tid).add(pid); 
-        
+        // Acquire the lock firstant
+        Long key = tid == null ? -1 : tid.getId();
+        if (!hasPages.containsKey(key))
+            hasPages.put(key, new HashSet<PageId>());
+        hasPages.get(key).add(pid);
+            
+        //System.out.println("tid: " + tid.getId() + " has page: " + pid.hashCode() + " Perm: " 
+        //   + (perm.equals(Permissions.READ_ONLY) ? "r" : "rw"));
+
         lm.addLock(pid.hashCode());
         try {
             lm.acquireLock(tid, pid.hashCode(), perm);
         }
+        catch (InterruptedException e) {
+            //System.out.println("deadlock in getPage");
+            throw new TransactionAbortedException();
+        }
         catch (Exception e) {
-            System.out.println("Error in getPage, " + e.getMessage());
+            throw new DbException("Error when acquire lock.");
         }
 
         // Load the page and return
@@ -144,10 +152,12 @@ public class BufferPool {
         throws IOException {
         // some code goes here
         // not necessary for lab1|lab2
-        /*if (commit) {
+        if (!hasPages.containsKey(tid.getId()))
+            return ;
+        if (commit) {
             flushPages(tid);
-        }*/
-        if (!commit) {
+        }
+        else if (!commit) {
             for (int i = 0;i < buffer.length;i++) {
                 if (buffer[i] != null && 
                     (tid.equals(buffer[i].isDirty()) || lm.holdsWriteLock(tid, buffer[i].getId().hashCode()))) {
@@ -155,11 +165,11 @@ public class BufferPool {
                 }
             }
         }
-        Iterator<PageId> it = hasPages.get(tid).iterator();
+        Iterator<PageId> it = hasPages.get(tid.getId()).iterator();
         while(it.hasNext()) {
             releasePage(tid, it.next());
         }
-        hasPages.remove(tid);
+        hasPages.remove(tid.getId());
     }
 
     /**
@@ -267,7 +277,7 @@ public class BufferPool {
         // some code goes here
         // not necessary for lab1|lab2|lab3
         for (int i = 0;i < buffer.length;i++) {
-            if (buffer[i] != null && hasPages.get(tid).contains(buffer[i].getId()) && tid.equals(buffer[i].isDirty())) {
+            if (buffer[i] != null && hasPages.get(tid.getId()).contains(buffer[i].getId()) && tid.equals(buffer[i].isDirty())) {
                 HeapFile hf = (HeapFile)Database.getCatalog().getDbFile(buffer[i].getId().getTableId());
                 hf.writePage(buffer[i]);
                 buffer[i].markDirty(false, null);

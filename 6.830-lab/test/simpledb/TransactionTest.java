@@ -75,6 +75,7 @@ public class TransactionTest extends TestUtil.CreateHeapFile {
     p.addTuple(t);
     p.markDirty(true, tid1);
     bp.transactionComplete(tid1, commit);
+    System.out.println("commit: " + commit);
 
     // now, flush the buffer pool and access the page again from disk.
     bp = Database.resetBufferPool(BufferPool.DEFAULT_PAGES);
@@ -93,6 +94,7 @@ public class TransactionTest extends TestUtil.CreateHeapFile {
       }
     }
 
+    System.out.println("found: " + found);
     assertEquals(commit, found);
   }
 

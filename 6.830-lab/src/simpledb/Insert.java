@@ -77,6 +77,9 @@ public class Insert extends AbstractDbIterator {
                 bp.insertTuple(tid, tableid, t);
                 cnt++;
             }
+            catch (TransactionAbortedException e) {
+                throw e;
+            }
             catch (Exception e) {
                 throw new DbException("Insert failed.");
             }
