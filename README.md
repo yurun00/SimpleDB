@@ -58,7 +58,7 @@ $ java -jar dist/simpledb.jar print file.dat N
 
 where `file.dat` is the name of a table created with the `convert` command, and `N` is the number of columns in the file.
 
-### Query parser and contest
+### 4. Query parser and contest
 
 A query parser for SimpleDB that can use to write and run SQL queries against the database. The first step is to create some data tables and a catalog. Suppose a file `data.txt` with the following contents:
 
@@ -128,3 +128,13 @@ Limitations
 * `UPDATE` expressions are not supported.
 * The string operator `LIKE` is allowed, but must be written out fully (that is, the Postgres tilde \[~\] shorthand is
 not allowed.)
+
+### 5. Query parser and contest (Lab 4)
+
+The optimizer will be invoked from `simpledb/Parser.java`. You may wish to review the lab 2 parser exercise before starting this lab. Briefly, if you have a catalog file `catalog.txt` describing your tables, you can run the parser by typing (from the `simpledb/` directory):
+
+```
+java -classpath bin/src/:lib/jline-0.9.94.jar:lib/sql4j.jar:lib/zql.jar simpledb.Parser catalog.txt
+```
+
+Note that this method of invocation is slightly different from that given in lab2 because we inadvertedly distributed a `simpledb.java` class that lacked the "parser" option. If you made the method in lab2 work, you may run the parser in that way as well.
