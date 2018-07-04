@@ -1,8 +1,13 @@
 package simpledb;
+import java.util.*;
 
 /** TableStats represents statistics (e.g., histograms) about base tables in a query */
 public class TableStats {
-    
+    private int tableid;
+    private int ioCostPerPage;
+    private int numPages;
+    private int ntups;
+    private Map<Integer, IntHistogram> intHistograms;
     /**
      * Number of bins for the histogram.
      * Feel free to increase this value over 100,
@@ -23,6 +28,73 @@ public class TableStats {
     	// You should try to do this reasonably efficiently, but you don't necessarily
     	// have to (for example) do everything in a single scan of the table.
     	// some code goes here
+        this.tableid = tableid;
+        this.ioCostPerPage = ioCostPerPage;
+        HeapFile hf = ((HeapFile)Database.getCatalog().getDbFile(tableid));
+        TupleDesc td = hf.getTupleDesc();
+        numPages = hf.numPages();
+
+        intHistograms = new HashMap<Integer, IntHistogram>();
+        Map<Integer, Integer> mins = new HashMap<Integer, Integer>();
+        Map<Integer, Integer> maxs = new HashMap<Integer, Integer>();
+        for (int i = 0;i < td.numFields();i++) {
+            if (td.getType(i) == Type.INT_TYPE) {
+                mins.put(i, Integer.MAX_VALUE);
+                maxs.put(i, Integer.MIN_VALUE);
+            }
+        }
+
+        ntups = 0;
+        DbFileIterator dfi = hf.iterator(new TransactionId());
+
+        try {
+            dfi.open();
+            try{
+                while(dfi.hasNext()) {
+                    Tuple t = dfi.next();
+                    for (int i = 0;i < td.numFields();i++) {
+                        if (td.getType(i) == Type.INT_TYPE) {
+                            int val = ((IntField)t.getField(i)).getValue();
+                            mins.put(i, Math.min(mins.get(i), val));
+                            maxs.put(i, Math.max(maxs.get(i), val));
+                        }
+                    }
+                    ntups++;
+                }
+            }
+            finally {
+                dfi.close();
+            }
+
+            for (int i = 0;i < td.numFields();i++) {
+                if (td.getType(i) == Type.INT_TYPE) {
+                    if (mins.get(i) <= maxs.get(i))
+                        intHistograms.put(i, new IntHistogram(NUM_HIST_BINS, mins.get(i), maxs.get(i)));
+                    else 
+                        intHistograms.put(i, new IntHistogram(NUM_HIST_BINS, Integer.MIN_VALUE, Integer.MAX_VALUE));
+                }
+            }
+
+            dfi.rewind();
+            try{
+                while(dfi.hasNext()) {
+                    Tuple t = dfi.next();
+                    for (int i = 0;i < td.numFields();i++) {
+                        if (td.getType(i) == Type.INT_TYPE) {
+                            int val = ((IntField)t.getField(i)).getValue();
+                            intHistograms.get(i).addValue(val);
+                        }
+                    }
+                }
+            }
+            finally {
+                dfi.close();
+            }
+
+        }
+        catch (Exception e) {
+            throw new RuntimeException(e);
+        }
     }
 
     /** 
@@ -40,7 +112,7 @@ public class TableStats {
      */ 
     public double estimateScanCost() {
     	// some code goes here
-        return 0;
+        return numPages * ioCostPerPage;
     }
 
     /** 
@@ -53,7 +125,7 @@ public class TableStats {
      */
     public int estimateTableCardinality(double selectivityFactor) {
     	// some code goes here
-        return 0;
+        return (int)(ntups * selectivityFactor);
     }
 
     /** 
@@ -66,6 +138,9 @@ public class TableStats {
      */
     public double estimateSelectivity(int field, Predicate.Op op, Field constant) {
     	// some code goes here
+        if (intHistograms.containsKey(field)) {
+            return intHistograms.get(field).estimateSelectivity(op, ((IntField)constant).getValue());
+        }
         return 1.0;
     }
 

@@ -82,13 +82,13 @@ public class JoinOptimizer {
     public double estimateJoinCost(LogicalJoinNode j, int card1, int card2, double cost1, double cost2) {
         if (j instanceof LogicalSubplanJoinNode) {
         	// A LogicalSubplanJoinNode represents a subquery.
-        	// You do not need to implement proper support for these for Lab 4.
-        	return card1 + cost1 + cost2;
+        	// You do not need to implement proper support for these
+            return card1 + cost1 + cost2;
         } else {
             // Insert your code here.
             // HINT:  You may need to use the variable "j" if you implemented a join
             //        algorithm that's more complicated than a basic nested-loops join.
-            return -1.0;
+            return cost1 + card1*cost2 + card1*card2;
         }
     }
 
@@ -110,8 +110,20 @@ public class JoinOptimizer {
             // You do not need to implement proper support for these for Lab 4.
             return card1;
         } else {
+            System.out.println("card1 " + card1 + ", card2 " + card2);
             // some code goes here
-            return -1;
+            if (j.p != Predicate.Op.EQUALS) {
+                return card1*card2*3/10;
+            }
+            else if (t1pkey) {
+                return card2;
+            }
+            else if (t2pkey) {
+                return card1;
+            }
+            else {
+                return Math.max(card1, card2);
+            }
         }
     }
 
@@ -165,11 +177,36 @@ public class JoinOptimizer {
                                               HashMap<String, Double> filterSelectivities,  
                                               boolean explain) throws ParsingException 
     {
-        //Not necessary for labs 1--3
+
+        // See the Lab 4 writeup for some hints as to how this function should work.
 
         // some code goes here
         //Replace the following
-        return joins;
+        for (LogicalJoinNode l: joins) {
+            if (!stats.containsKey(l.t1) || !filterSelectivities.containsKey(l.t1) 
+                || !stats.containsKey(l.t2) || !filterSelectivities.containsKey(l.t2) )
+                throw new ParsingException("Missing table in order join.");
+        }
+
+        PlanCache pc = new PlanCache();
+        for (int i = 1;i <= joins.size();i++) {
+            Set<Set<LogicalJoinNode>> subsets = enumerateSubsets(joins, i);
+            for (Set<LogicalJoinNode> s: subsets) {
+                CostCard bestCostCard = null;
+                for (LogicalJoinNode joinToRemove: s) {
+                    CostCard cc = computeCostAndCardOfSubplan(stats, filterSelectivities, joinToRemove, 
+                        s, bestCostCard == null ? Double.MAX_VALUE : bestCostCard.cost, pc);
+                    if (cc != null) {
+                        bestCostCard = cc;
+                    }
+                }
+                if (bestCostCard != null)
+                    pc.addPlan(s, bestCostCard.cost, bestCostCard.card, bestCostCard.plan);
+            }
+        }
+        if (explain)
+            printJoins(joins, pc, stats, filterSelectivities);
+        return pc.getOrder(new HashSet<LogicalJoinNode>(joins));
     } 
  
     //===================== Private Methods =================================
